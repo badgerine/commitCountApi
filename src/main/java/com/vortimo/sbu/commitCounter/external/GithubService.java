@@ -3,15 +3,21 @@ package com.vortimo.sbu.commitCounter.external;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
+import com.vortimo.sbu.commitCounter.error.ApiExceptionHandler;
+import com.vortimo.sbu.commitCounter.error.RepositoryNotFoundException;
 import com.vortimo.sbu.commitCounter.model.Timespan;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.annotation.Bean;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.reactive.function.client.WebClient;
+import org.springframework.web.reactive.function.client.WebClientResponseException;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -31,21 +37,24 @@ public class GithubService {
         return WebClient.create(BASE_URL);
     }
 
-    public Map<String,Integer> getRepoCommits(String repoUrl, Timespan timespan){
+    public Map<String,Integer> getRepoCommits(String repoUrl, Timespan timespan) {
         LocalDateTime dateTimeSince = generateDateParam(timespan);
         String jsonResponse = retrieveJsonResponse(repoUrl, dateTimeSince);
         return parseUsernameCount(jsonResponse);
     }
 
-    private String retrieveJsonResponse(String repoUrl, LocalDateTime dateTimeSince){
-        final String awaitedResponse;
-
-
-        return webClient.get()
-                .uri(uriBuilder -> uriBuilder.path(repoUrl).queryParam("since",dateTimeSince).build())
-                .retrieve()
-                .bodyToMono(String.class)
-                .block();
+    private String retrieveJsonResponse(String repoUrl, LocalDateTime dateTimeSince) {
+        String awaitedResponse;
+        try {
+             awaitedResponse = webClient.get()
+                    .uri(uriBuilder -> uriBuilder.path(repoUrl).queryParam("since", dateTimeSince).build())
+                    .retrieve()
+                    .bodyToMono(String.class)
+                    .block();
+        }catch (WebClientResponseException exc) {
+            throw new RepositoryNotFoundException(String.format("Repository [%s] Not found",repoUrl), exc);
+        }
+        return awaitedResponse;
     }
 
     private Map<String,Integer> parseUsernameCount(String rawJsonResponse){
